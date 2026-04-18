@@ -108,7 +108,11 @@ export default function DashboardPage() {
   async function handleComplete(habitId: string) {
     const key = `${habitId}|${today}`
     // Optimistic update
-    setOptimistic((prev) => new Set([...prev, key]))
+    setOptimistic((prev) => {
+      const next = new Set(prev)
+      next.add(key)
+      return next
+    })
     try {
       const res = await fetch(`/api/habits/${habitId}/complete`, {
         method: "POST",

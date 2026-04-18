@@ -51,9 +51,9 @@ function calcCurrentStreak(habitId: string, logs: HabitLog[]): number {
 }
 
 function calcBestStreak(habitId: string, logs: HabitLog[]): number {
-  const dates = [
-    ...new Set(logs.filter((l) => l.habitId === habitId).map((l) => l.date)),
-  ].sort()
+  const dates = Array.from(
+    new Set(logs.filter((l) => l.habitId === habitId).map((l) => l.date))
+  ).sort()
 
   if (dates.length === 0) return 0
   let best = 1
