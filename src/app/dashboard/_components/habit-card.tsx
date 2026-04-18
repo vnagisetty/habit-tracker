@@ -1,8 +1,7 @@
 "use client"
 
-import { Check, Flame } from "lucide-react"
+import { Flame } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 import type { Habit, HabitLog } from "@/lib/sheets"
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -11,97 +10,108 @@ function toLocalDateStr(date: Date = new Date()): string {
   return date.toLocaleDateString("en-CA") // YYYY-MM-DD in local timezone
 }
 
-export function getLast7Days(): string[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (6 - i))
-    return toLocalDateStr(d)
-  })
+function buildMonthDateStr(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
 export function calcStreak(habitId: string, logs: HabitLog[]): number {
   const done = new Set(logs.filter((l) => l.habitId === habitId).map((l) => l.date))
   const today = toLocalDateStr()
-  let streak = 0
-  // If today isn't done yet, start counting from yesterday so an unbroken
-  // streak doesn't reset at midnight before the user logs.
   const startOffset = done.has(today) ? 0 : 1
+  let streak = 0
   for (let i = startOffset; ; i++) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    if (done.has(toLocalDateStr(d))) {
-      streak++
-    } else {
-      break
-    }
+    if (done.has(toLocalDateStr(d))) streak++
+    else break
   }
   return streak
 }
 
-// ─── sub-components ───────────────────────────────────────────────────────────
+// ─── MonthCalendar ────────────────────────────────────────────────────────────
 
-function CircularCheckbox({
-  checked,
-  onToggle,
-}: {
-  checked: boolean
-  onToggle: () => void
-}) {
-  return (
-    <button
-      onClick={onToggle}
-      aria-label={checked ? "Mark incomplete" : "Mark complete"}
-      className={cn(
-        "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-        checked
-          ? "border-green-500 bg-green-500 shadow-md shadow-green-200"
-          : "border-gray-300 bg-white hover:border-green-400"
-      )}
-    >
-      <Check
-        strokeWidth={3}
-        className={cn(
-          "h-4 w-4 text-white transition-all duration-200",
-          checked ? "scale-100 opacity-100" : "scale-50 opacity-0"
-        )}
-      />
-    </button>
-  )
-}
+const DOW_LABELS = ["S", "M", "T", "W", "T", "F", "S"]
 
-const DAY_LABELS = ["6d", "5d", "4d", "3d", "2d", "1d", "T"]
-
-function WeeklyHeatmap({
+function MonthCalendar({
   habitId,
   completionKeys,
-  last7Days,
+  onComplete,
 }: {
   habitId: string
   completionKeys: Set<string>
-  last7Days: string[]
+  onComplete: (habitId: string, date: string) => void
 }) {
+  const today = new Date()
+  const todayStr = toLocalDateStr(today)
+  const year = today.getFullYear()
+  const month = today.getMonth()
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDow = new Date(year, month, 1).getDay() // 0 = Sunday
+
+  // Flat list: null = empty padding cell, number = day of month
+  const cells: (number | null)[] = [
+    ...Array<null>(firstDow).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+
   return (
-    <div className="flex items-end gap-1">
-      {last7Days.map((date, i) => {
-        const done = completionKeys.has(`${habitId}|${date}`)
-        const isToday = i === 6
-        return (
-          <div key={date} className="flex flex-col items-center gap-0.5">
-            <div
-              title={date}
-              className={cn(
-                "h-5 w-5 rounded-sm transition-colors duration-300",
-                done
-                  ? "bg-green-500"
-                  : isToday
-                    ? "bg-gray-200 ring-1 ring-gray-400 ring-offset-1"
-                    : "bg-gray-200"
-              )}
-            />
-            <span className="text-[9px] text-muted-foreground">{DAY_LABELS[i]}</span>
+    <div>
+      {/* Month label */}
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-widest text-zinc-500">
+        {today.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+      </p>
+
+      {/* Day-of-week headers */}
+      <div className="mb-1 grid grid-cols-7 gap-1">
+        {DOW_LABELS.map((d, i) => (
+          <div
+            key={i}
+            className="flex h-5 items-center justify-center text-[10px] font-medium text-zinc-600"
+          >
+            {d}
           </div>
-        )
-      })}
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((day, i) => {
+          if (day === null) return <div key={i} />
+
+          const dateStr = buildMonthDateStr(year, month, day)
+          const isToday = dateStr === todayStr
+          const isFuture = dateStr > todayStr
+          const isCompleted = completionKeys.has(`${habitId}|${dateStr}`)
+
+          return (
+            <button
+              key={i}
+              disabled={isFuture}
+              onClick={isFuture ? undefined : () => onComplete(habitId, dateStr)}
+              title={dateStr}
+              className={cn(
+                "flex aspect-square w-full items-center justify-center rounded-md text-[11px] font-semibold transition-all duration-150",
+                // Completed days — green fill
+                isCompleted && !isToday && "bg-[#4ade80] text-black",
+                // Today + completed — green fill with white ring
+                isCompleted && isToday &&
+                  "bg-[#4ade80] text-black ring-2 ring-white ring-offset-1 ring-offset-[#1a1a1a]",
+                // Today, not yet done — green outline only
+                !isCompleted && isToday &&
+                  "ring-2 ring-[#4ade80] text-white hover:bg-zinc-700",
+                // Past missed days
+                !isCompleted && !isToday && !isFuture &&
+                  "bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300",
+                // Future days
+                isFuture && "bg-zinc-900 text-zinc-700 cursor-default",
+              )}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -112,47 +122,39 @@ interface HabitCardProps {
   habit: Habit
   completionKeys: Set<string>
   logs: HabitLog[]
-  last7Days: string[]
-  onComplete: (habitId: string) => void
+  onComplete: (habitId: string, date: string) => void
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Health: "bg-emerald-100 text-emerald-700",
-  Learning: "bg-blue-100 text-blue-700",
-  Fitness: "bg-purple-100 text-purple-700",
-  Mindfulness: "bg-amber-100 text-amber-700",
-  Other: "bg-gray-100 text-gray-700",
+  Health: "bg-emerald-900/50 text-emerald-400",
+  Learning: "bg-blue-900/50 text-blue-400",
+  Fitness: "bg-purple-900/50 text-purple-400",
+  Mindfulness: "bg-amber-900/50 text-amber-400",
+  Other: "bg-zinc-700 text-zinc-300",
 }
 
-export function HabitCard({ habit, completionKeys, logs, last7Days, onComplete }: HabitCardProps) {
+export function HabitCard({ habit, completionKeys, logs, onComplete }: HabitCardProps) {
   const today = toLocalDateStr()
   const isCompletedToday = completionKeys.has(`${habit.id}|${today}`)
   const streak = calcStreak(habit.id, logs)
   const categoryColor = CATEGORY_COLORS[habit.category] ?? CATEGORY_COLORS.Other
 
   return (
-    <div
-      className={cn(
-        "rounded-xl border bg-card p-4 shadow-sm transition-all duration-300",
-        isCompletedToday && "border-green-200 bg-green-50/50"
-      )}
-    >
-      {/* Header row */}
-      <div className="flex items-center gap-3">
-        <CircularCheckbox checked={isCompletedToday} onToggle={() => onComplete(habit.id)} />
-
-        <div className="min-w-0 flex-1">
-          <p
+    <div className="rounded-xl border border-zinc-800 bg-[#1a1a1a] p-4 shadow-md transition-all duration-300">
+      {/* Header */}
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3
             className={cn(
-              "truncate text-sm font-semibold transition-colors",
-              isCompletedToday && "text-muted-foreground line-through"
+              "truncate text-sm font-semibold text-white transition-colors",
+              isCompletedToday && "text-zinc-400 line-through"
             )}
           >
             {habit.name}
-          </p>
+          </h3>
           <span
             className={cn(
-              "mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
+              "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
               categoryColor
             )}
           >
@@ -161,21 +163,19 @@ export function HabitCard({ habit, completionKeys, logs, last7Days, onComplete }
         </div>
 
         {streak > 0 && (
-          <Badge variant="streak" className="shrink-0">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-900/40 px-2.5 py-0.5 text-xs font-semibold text-orange-400">
             <Flame className="h-3 w-3" />
             {streak}
-          </Badge>
+          </span>
         )}
       </div>
 
-      {/* Weekly heatmap */}
-      <div className="mt-4">
-        <WeeklyHeatmap
-          habitId={habit.id}
-          completionKeys={completionKeys}
-          last7Days={last7Days}
-        />
-      </div>
+      {/* Monthly calendar grid */}
+      <MonthCalendar
+        habitId={habit.id}
+        completionKeys={completionKeys}
+        onComplete={onComplete}
+      />
     </div>
   )
 }

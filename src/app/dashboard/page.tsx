@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Plus, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { HabitCard, getLast7Days } from "./_components/habit-card"
+import { HabitCard } from "./_components/habit-card"
 import { AddHabitDialog } from "./_components/add-habit-dialog"
 import type { Habit, HabitLog } from "@/lib/sheets"
 
@@ -12,18 +12,27 @@ import type { Habit, HabitLog } from "@/lib/sheets"
 
 function HabitCardSkeleton() {
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm space-y-4">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-8 w-8 rounded-full" />
-        <div className="flex-1 space-y-1.5">
-          <Skeleton className="h-4 w-3/5" />
-          <Skeleton className="h-3 w-1/4 rounded-full" />
+    <div className="rounded-xl border border-zinc-800 bg-[#1a1a1a] p-4 shadow-md space-y-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-1.5 flex-1">
+          <Skeleton className="h-4 w-3/5 bg-zinc-800" />
+          <Skeleton className="h-3 w-1/4 rounded-full bg-zinc-800" />
         </div>
-        <Skeleton className="h-5 w-10 rounded-full" />
+        <Skeleton className="h-5 w-12 rounded-full bg-zinc-800" />
       </div>
-      <div className="flex gap-1">
-        {Array.from({ length: 7 }).map((_, i) => (
-          <Skeleton key={i} className="h-5 w-5 rounded-sm" />
+      {/* Calendar grid skeleton */}
+      <div className="space-y-1">
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-square w-full rounded-md bg-zinc-800" />
+          ))}
+        </div>
+        {Array.from({ length: 4 }).map((_, row) => (
+          <div key={row} className="grid grid-cols-7 gap-1">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <Skeleton key={i} className="aspect-square w-full rounded-md bg-zinc-800" />
+            ))}
+          </div>
         ))}
       </div>
     </div>
@@ -64,8 +73,6 @@ export default function DashboardPage() {
   // Optimistic completions: Set of "habitId|date" keys added before server confirms
   const [optimistic, setOptimistic] = useState<Set<string>>(new Set())
 
-  const last7Days = useMemo(() => getLast7Days(), [])
-
   // Merged completion keys (server + optimistic) used by every HabitCard
   const completionKeys = useMemo(() => {
     const keys = new Set(logs.map((l) => `${l.habitId}|${l.date}`))
@@ -105,8 +112,8 @@ export default function DashboardPage() {
 
   // ── actions ──────────────────────────────────────────────────────────────────
 
-  async function handleComplete(habitId: string) {
-    const key = `${habitId}|${today}`
+  async function handleComplete(habitId: string, date: string) {
+    const key = `${habitId}|${date}`
     // Optimistic update
     setOptimistic((prev) => {
       const next = new Set(prev)
@@ -117,10 +124,10 @@ export default function DashboardPage() {
       const res = await fetch(`/api/habits/${habitId}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: today }),
+        body: JSON.stringify({ date }),
       })
       if (!res.ok) throw new Error("Failed to log completion")
-      // Sync logs from server so streak and heatmap are accurate
+      // Sync logs so the calendar and streak reflect the new entry
       const historyRes = await fetch("/api/habits/history?days=30")
       if (historyRes.ok) setLogs(await historyRes.json())
     } catch {
@@ -194,7 +201,6 @@ export default function DashboardPage() {
               habit={habit}
               completionKeys={completionKeys}
               logs={logs}
-              last7Days={last7Days}
               onComplete={handleComplete}
             />
           ))}
