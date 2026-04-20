@@ -36,10 +36,12 @@ function MonthCalendar({
   habitId,
   completionKeys,
   onComplete,
+  onUncomplete,
 }: {
   habitId: string
   completionKeys: Set<string>
   onComplete: (habitId: string, date: string) => void
+  onUncomplete: (habitId: string, date: string) => void
 }) {
   const today = new Date()
   const todayStr = toLocalDateStr(today)
@@ -88,7 +90,13 @@ function MonthCalendar({
             <button
               key={i}
               disabled={isFuture}
-              onClick={isFuture ? undefined : () => onComplete(habitId, dateStr)}
+              onClick={
+                isFuture
+                  ? undefined
+                  : isCompleted
+                  ? () => onUncomplete(habitId, dateStr)
+                  : () => onComplete(habitId, dateStr)
+              }
               title={dateStr}
               className={cn(
                 "flex aspect-square w-full items-center justify-center rounded-md text-[11px] font-semibold transition-all duration-150",
@@ -123,6 +131,7 @@ interface HabitCardProps {
   completionKeys: Set<string>
   logs: HabitLog[]
   onComplete: (habitId: string, date: string) => void
+  onUncomplete: (habitId: string, date: string) => void
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -133,7 +142,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Other: "bg-zinc-700 text-zinc-300",
 }
 
-export function HabitCard({ habit, completionKeys, logs, onComplete }: HabitCardProps) {
+export function HabitCard({ habit, completionKeys, logs, onComplete, onUncomplete }: HabitCardProps) {
   const today = toLocalDateStr()
   const isCompletedToday = completionKeys.has(`${habit.id}|${today}`)
   const streak = calcStreak(habit.id, logs)
@@ -175,6 +184,7 @@ export function HabitCard({ habit, completionKeys, logs, onComplete }: HabitCard
         habitId={habit.id}
         completionKeys={completionKeys}
         onComplete={onComplete}
+        onUncomplete={onUncomplete}
       />
     </div>
   )

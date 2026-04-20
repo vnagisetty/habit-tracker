@@ -114,12 +114,7 @@ export default function DashboardPage() {
 
   async function handleComplete(habitId: string, date: string) {
     const key = `${habitId}|${date}`
-    // Optimistic update
-    setOptimistic((prev) => {
-      const next = new Set(prev)
-      next.add(key)
-      return next
-    })
+    setOptimistic((prev) => { const next = new Set(prev); next.add(key); return next })
     try {
       const res = await fetch(`/api/habits/${habitId}/complete`, {
         method: "POST",
@@ -127,16 +122,31 @@ export default function DashboardPage() {
         body: JSON.stringify({ date }),
       })
       if (!res.ok) throw new Error("Failed to log completion")
-      // Sync logs so the calendar and streak reflect the new entry
       const historyRes = await fetch("/api/habits/history?days=30")
       if (historyRes.ok) setLogs(await historyRes.json())
     } catch {
-      // Revert optimistic update on failure
-      setOptimistic((prev) => {
-        const next = new Set(prev)
-        next.delete(key)
-        return next
+      setOptimistic((prev) => { const next = new Set(prev); next.delete(key); return next })
+    }
+  }
+
+  async function handleUncomplete(habitId: string, date: string) {
+    const key = `${habitId}|${date}`
+    // Optimistic removal — remove from both server logs and optimistic set
+    setLogs((prev) => prev.filter((l) => !(l.habitId === habitId && l.date === date)))
+    setOptimistic((prev) => { const next = new Set(prev); next.delete(key); return next })
+    try {
+      const res = await fetch(`/api/habits/${habitId}/complete`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date }),
       })
+      if (!res.ok) throw new Error("Failed to remove completion")
+      const historyRes = await fetch("/api/habits/history?days=30")
+      if (historyRes.ok) setLogs(await historyRes.json())
+    } catch {
+      // Revert: re-fetch to restore correct state
+      const historyRes = await fetch("/api/habits/history?days=30")
+      if (historyRes.ok) setLogs(await historyRes.json())
     }
   }
 
@@ -202,6 +212,7 @@ export default function DashboardPage() {
               completionKeys={completionKeys}
               logs={logs}
               onComplete={handleComplete}
+              onUncomplete={handleUncomplete}
             />
           ))}
         </div>

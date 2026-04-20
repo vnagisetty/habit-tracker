@@ -110,6 +110,57 @@ export async function logHabitCompletion(
   })
 }
 
+/**
+ * Delete the log entry matching (userId, habitId, date), if it exists.
+ * Uses batchUpdate to delete the exact row so no other data shifts unexpectedly.
+ */
+export async function removeCompletion(
+  userId: string,
+  habitId: string,
+  date: string
+): Promise<void> {
+  const sheets = getSheetsClient()
+
+  // Find the 0-based row index of the matching entry (data starts at row index 1, i.e. row 2)
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: "logs!A2:D",
+  })
+  const rows = (res.data.values ?? []) as string[][]
+  const rowIndex = rows.findIndex(
+    ([u, h, d]) => u === userId && h === habitId && d === date
+  )
+  if (rowIndex === -1) return // already gone — nothing to do
+
+  // Resolve the spreadsheet's internal sheet ID for "logs"
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID })
+  const logsSheet = meta.data.sheets?.find(
+    (s) => s.properties?.title === "logs"
+  )
+  const sheetId = logsSheet?.properties?.sheetId ?? 0
+
+  // Row 0 in the values array == spreadsheet row 2 (row 1 is the header)
+  const spreadsheetRow = rowIndex + 1 // 0-based index within the data range
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: spreadsheetRow,   // 0-based, inclusive (skips header at index 0)
+              endIndex: spreadsheetRow + 1, // exclusive
+            },
+          },
+        },
+      ],
+    },
+  })
+}
+
 /** Append a new habit row and return the created habit. */
 export async function addHabit(
   userId: string,
