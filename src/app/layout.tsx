@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#4ade80",
+  themeColor: "#16a34a",
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
@@ -38,6 +38,7 @@ export default async function RootLayout({
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="icon" href="/favicon.ico" />
+        <meta name="theme-color" content="#16a34a" />
       </head>
       <body className={inter.className}>
         <SessionProvider session={session}>{children}</SessionProvider>
